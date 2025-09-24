@@ -58,6 +58,8 @@ Talos OS specific configurations:
 
 ## 🚀 Quick Start
 
+Get your Cilium homelab up and running in minutes! Simply clone the repository and run a single command.
+
 ### Prerequisites
 
 The Makefile will automatically install required dependencies on macOS with Homebrew:
@@ -65,6 +67,17 @@ The Makefile will automatically install required dependencies on macOS with Home
 - `talosctl` - Talos cluster management CLI
 - `kubectl` - Kubernetes CLI
 - `cilium` - Cilium CLI for network management
+
+### Installation
+
+1. **Clone the repository:**
+
+   ```bash
+   git clone https://github.com/bariiss/cilium-homelab.git
+   cd cilium-homelab
+   ```
+
+   That's it! No complex setup required - everything is automated through the Makefile.
 
 ### Basic Usage
 
