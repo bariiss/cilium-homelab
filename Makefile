@@ -1,6 +1,14 @@
 CLUSTER_NAME ?= talos-home
-CONTROLPLANES ?= 2
-WORKERS ?= 2
+CONTROLPLANES ?= 1
+WORKERS ?= 1
+
+# Specific resource allocation for control plane nodes
+CONTROLPLANE_CPUS ?= 2
+CONTROLPLANE_MEMORY ?= 2048
+
+# Specific resource allocation for worker nodes  
+WORKER_CPUS ?= 2
+WORKER_MEMORY ?= 2048
 
 # Optional: set to 1 to skip automatic dependency installation attempts
 SKIP_AUTO_INSTALL ?= 0
@@ -115,58 +123,68 @@ endif
 
 # ---- Helpers (shell checks embedded in targets) ----
 # "Cluster exists" if either talosctl knows it OR a talos context matches the name (or name-<n>)
-define CHECK_CLUSTER_EXISTS
-if talosctl cluster show --name $(CLUSTER_NAME) >/dev/null 2>&1 || \
-   talosctl config contexts 2>/dev/null | awk 'NR>1 {gsub(/^\*/,"",$$1); print $$1}' | grep -qE '^$(CLUSTER_NAME)(-[0-9]+)?$$'; then \
-  true; \
-else \
-  false; \
-fi
-endef
+CHECK_CLUSTER_EXISTS_CMD = talosctl cluster show --name $(CLUSTER_NAME) >/dev/null 2>&1 || \
+   talosctl config contexts 2>/dev/null | awk 'NR>1 {gsub(/^\*/,"",$$1); print $$1}' | grep -qE '^$(CLUSTER_NAME)(-[0-9]+)?$$'
 
 create-cluster: deps ## Create Talos cluster (override CONTROLPLANES=X WORKERS=Y) (no-op if exists)
 	@echo "[create] Checking if cluster '$(CLUSTER_NAME)' already exists..."
-	@$(CHECK_CLUSTER_EXISTS) && { echo "[create] Cluster $(CLUSTER_NAME) already exists; skipping."; exit 0; } || true
-	@echo "[create] Pruning any stale talos contexts matching $(CLUSTER_NAME)(-N)..."
-	@contexts=$$(talosctl config contexts 2>/dev/null | awk 'NR>1 {gsub(/^\*/,"",$$1); print $$1}' | grep -E '^$(CLUSTER_NAME)(-[0-9]+)?$$' || true); \
-	if [ -n "$$contexts" ]; then \
-	  echo "[create] Removing talos contexts: $$contexts"; \
-	  talosctl config remove $$contexts 2>/dev/null || true; \
+	@if talosctl cluster show --name $(CLUSTER_NAME) 2>/dev/null | grep -q "NAME.*$(CLUSTER_NAME)" && \
+	   [ "$$(talosctl cluster show --name $(CLUSTER_NAME) 2>/dev/null | awk '/NODES:/,EOF {if($$1 != "" && $$1 != "NODES:" && $$1 != "NAME") print "running"; exit}')" = "running" ]; then \
+		echo "[create] Cluster $(CLUSTER_NAME) already exists with running nodes; skipping."; \
+		talosctl cluster show --name $(CLUSTER_NAME); \
+		exit 0; \
 	else \
-	  echo "[create] No matching contexts"; \
+		echo "[create] Cluster $(CLUSTER_NAME) not found or not running; creating..."; \
+		echo "[create] Cleaning up any stale contexts..."; \
+		talosctl config contexts 2>/dev/null | awk 'NR>1 {gsub(/^\*/,"",$$1); print $$1}' | grep -E '^$(CLUSTER_NAME)' | xargs -I {} talosctl config remove {} --force 2>/dev/null || true; \
+		talosctl cluster create --name $(CLUSTER_NAME) \
+			--controlplanes $(CONTROLPLANES) \
+			--workers $(WORKERS) \
+			--cpus $(CONTROLPLANE_CPUS) \
+			--memory $(CONTROLPLANE_MEMORY) \
+			--cpus-workers $(WORKER_CPUS) \
+			--memory-workers $(WORKER_MEMORY) \
+			--config-patch @talos/patch.yaml \
+			--skip-k8s-node-readiness-check; \
 	fi
-	talosctl cluster create --name $(CLUSTER_NAME) \
-		--controlplanes $(CONTROLPLANES) \
-		--workers $(WORKERS) \
-		--config-patch @talos/patch.yaml \
-		--skip-k8s-node-readiness-check
 
-destroy-cluster: ## Destroy Talos cluster (no-op if absent)
-	talosctl cluster destroy --name $(CLUSTER_NAME) || true
+destroy-cluster: ## Destroy Talos cluster
+	@echo "[destroy] Destroying cluster $(CLUSTER_NAME)..."
+	@talosctl cluster destroy --name $(CLUSTER_NAME)
 	@echo "[destroy] Cluster $(CLUSTER_NAME) destroyed."
+	@echo "[destroy] Cleaning up kubectl contexts and clusters..."
+	@kubectl config get-contexts -o name | grep -E "admin@$(CLUSTER_NAME)" | xargs -I {} kubectl config delete-context {} 2>/dev/null || true
+	@kubectl config get-clusters | grep -E "^$(CLUSTER_NAME)" | xargs -I {} kubectl config delete-cluster {} 2>/dev/null || true
+	@echo "[destroy] Cleaning up Talos contexts..."
+	@talosctl config contexts 2>/dev/null | awk 'NR>1 {gsub(/^\*/,"",$$1); print $$1}' | grep -E '^$(CLUSTER_NAME)(-[0-9]+)?$$' | xargs -I {} talosctl config remove {} -y 2>/dev/null || true
+	@echo "[destroy] Unsetting kubectl current context..."
+	@kubectl config unset current-context 2>/dev/null || true
+	@echo "[destroy] All contexts and clusters cleaned up."
 
 deploy: deps ## Generate manifests & deploy core stack (no-op if already deployed)
 	@echo "[deploy] Checking for existing Cilium installation..."
-	@if kubectl -n kube-system get ds cilium >/dev/null 2>&1 && \
-	     kubectl -n kube-system get deploy cilium-operator >/dev/null 2>&1; then \
-	  echo "[deploy] Core stack (Cilium) already applied; skipping."; \
-	  exit 0; \
+	@if cilium status >/dev/null 2>&1; then \
+		echo "[deploy] Cilium is already running; skipping installation."; \
+		cilium status; \
+		exit 0; \
+	else \
+		echo "[deploy] Rendering Cilium manifests (dry-run) -> deploy/00-core/cilium-manifests.yaml"; \
+		mkdir -p deploy/00-core; \
+		echo "[deploy] Generating and applying Cilium manifests..."; \
+		cilium install --values cilium/cilium-values.yaml --dry-run > deploy/00-core/cilium-manifests.yaml; \
+		kubectl apply -k deploy/00-core; \
+		kubectl -n kube-system rollout status ds/cilium --timeout=5m; \
+		kubectl -n kube-system rollout status deploy/cilium-operator --timeout=5m; \
+		echo "[deploy] Waiting for Hubble components..."; \
+		kubectl -n kube-system rollout status deploy/hubble-relay --timeout=5m; \
+		kubectl -n kube-system rollout status deploy/hubble-ui --timeout=5m; \
+		echo "[deploy] Generated Cilium manifests applied."; \
+		echo "[deploy] Waiting for all Cilium pods to be ready..."; \
+		kubectl -n kube-system wait --for=condition=Ready pods -l k8s-app=cilium --timeout=5m; \
+		kubectl -n kube-system wait --for=condition=Ready pods -l k8s-app=hubble-relay --timeout=5m; \
+		kubectl -n kube-system wait --for=condition=Ready pods -l k8s-app=hubble-ui --timeout=5m; \
+		echo "[deploy] Checking Cilium status..."; \
+		cilium status; \
 	fi
-	@echo "[deploy] Rendering Cilium manifests (dry-run) -> deploy/00-core/cilium-manifests.yaml"
-	@mkdir -p deploy/00-core
-	cilium install --values cilium/cilium-values.yaml --dry-run > deploy/00-core/cilium-manifests.yaml
-	kubectl apply -k deploy/00-core
-	kubectl -n kube-system rollout status ds/cilium --timeout=5m
-	kubectl -n kube-system rollout status deploy/cilium-operator --timeout=5m
-	@echo "[deploy] Waiting for Hubble components..."
-	kubectl -n kube-system rollout status deploy/hubble-relay --timeout=5m
-	kubectl -n kube-system rollout status deploy/hubble-ui --timeout=5m
-	@echo "[deploy] Generated Cilium manifests applied."
-	@echo "[deploy] Waiting for all Cilium pods to be ready..."
-	kubectl -n kube-system wait --for=condition=Ready pods -l k8s-app=cilium --timeout=5m
-	kubectl -n kube-system wait --for=condition=Ready pods -l k8s-app=hubble-relay --timeout=5m
-	kubectl -n kube-system wait --for=condition=Ready pods -l k8s-app=hubble-ui --timeout=5m
-	@echo "[deploy] Checking Cilium status..."
-	cilium status
 
 clean: destroy-cluster ## Clean up everything

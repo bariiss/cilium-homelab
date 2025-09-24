@@ -98,7 +98,7 @@ The Makefile will automatically install required dependencies and verify system 
    make create-cluster
    ```
 
-   This creates a Talos cluster with 2 control plane nodes and 2 worker nodes.
+   This creates a Talos cluster with 1 control plane node and 1 worker node (default configuration).
 
 2. **Deploy Cilium and core components:**
 
@@ -126,13 +126,25 @@ The Makefile will automatically install required dependencies and verify system 
 
 #### Custom Cluster Configuration
 
-Override default cluster size:
+**Override cluster size:**
 
 ```bash
-make create-cluster CONTROLPLANES=1 WORKERS=3
+make create-cluster CONTROLPLANES=2 WORKERS=3
 ```
 
-Skip automatic dependency installation:
+**Configure resource allocation:**
+
+```bash
+make create-cluster CPUS=4 MEMORY=8192  # 4 CPUs, 8GB RAM per node
+```
+
+**Combine multiple parameters:**
+
+```bash
+make create-cluster CONTROLPLANES=1 WORKERS=2 CPUS=2 MEMORY=6144
+```
+
+**Skip automatic dependency installation:**
 
 ```bash
 make create-cluster SKIP_AUTO_INSTALL=1
@@ -143,9 +155,22 @@ make create-cluster SKIP_AUTO_INSTALL=1
 - `help` - Show available targets with descriptions
 - `deps` - Verify and install required CLI tools
 - `create-cluster` - Create Talos cluster (idempotent - skips if already exists)
-- `destroy-cluster` - Destroy the cluster (safe - checks existence first)
+- `destroy-cluster` - Destroy the cluster and clean all contexts (comprehensive cleanup)
 - `deploy` - Deploy Cilium and core components (requires running cluster)
 - `clean` - Complete cleanup (destroys cluster)
+
+#### Configuration Parameters
+
+All parameters can be overridden when running make targets:
+
+| Parameter | Default | Description | Example Values |
+|-----------|---------|-------------|----------------|
+| `CLUSTER_NAME` | `talos-home` | Name of the cluster | `my-cluster` |
+| `CONTROLPLANES` | `1` | Number of control plane nodes | `1`, `2`, `3` |
+| `WORKERS` | `1` | Number of worker nodes | `1`, `2`, `3`, `4` |
+| `CPUS` | `4` | CPU cores per node | `1`, `2`, `4`, `8` |
+| `MEMORY` | `4096` | Memory in MB per node | `2048` (2GB), `8192` (8GB) |
+| `SKIP_AUTO_INSTALL` | `0` | Skip automatic tool installation | `0` (install), `1` (skip) |
 
 ## 🔧 Configuration Details
 
@@ -154,8 +179,10 @@ make create-cluster SKIP_AUTO_INSTALL=1
 **Default Settings:**
 
 - Cluster name: `talos-home`
-- Control planes: 2 nodes
-- Workers: 2 nodes
+- Control planes: 1 node
+- Workers: 1 node  
+- CPUs per node: 4 cores
+- Memory per node: 4096MB (4GB)
 - Network: Docker-based local cluster
 - CNI: Disabled (Cilium replaces it)
 - Kube-proxy: Disabled (Cilium kube-proxy replacement)
@@ -268,6 +295,10 @@ kubectl logs -n kube-system -l k8s-app=cilium --tail=50
 **Check cluster health:**
 
 ```bash
+# For default 1+1 cluster (1 control plane + 1 worker)
+talosctl health --nodes 10.5.0.2,10.5.0.3
+
+# For larger clusters, adjust IP range accordingly
 talosctl health --nodes 10.5.0.2,10.5.0.3,10.5.0.4,10.5.0.5
 ```
 
