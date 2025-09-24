@@ -62,7 +62,10 @@ Get your Cilium homelab up and running in minutes! Simply clone the repository a
 
 ### Prerequisites
 
-The Makefile will automatically install required dependencies on macOS with Homebrew:
+The Makefile will automatically install required dependencies:
+
+**macOS**: Uses Homebrew for installation  
+**Linux (Ubuntu/Debian)**: Uses official installation methods and package managers
 
 - `talosctl` - Talos cluster management CLI
 - `kubectl` - Kubernetes CLI
@@ -206,7 +209,23 @@ kubectl top nodes
 kubectl top pods -A
 ```
 
-## 🛠️ Troubleshooting
+## � System Requirements
+
+### Supported Operating Systems
+
+- **macOS**: Automatic dependency installation via Homebrew
+- **Linux**: Ubuntu 20.04+, Debian 11+, or compatible distributions
+- **Prerequisites**: Docker installed and running
+
+### Automatic Installation Support
+
+| Tool | macOS (Homebrew) | Linux |
+|------|------------------|-------|
+| `talosctl` | ✅ siderolabs/tap | ✅ Official installer |
+| `kubectl` | ✅ kubernetes-cli | ✅ Official Kubernetes APT repo |
+| `cilium` | ✅ cilium-cli | ✅ GitHub releases |
+
+## �🛠️ Troubleshooting
 
 ### Common Issues
 
@@ -215,12 +234,18 @@ kubectl top pods -A
    - Check if required ports are available
    - Verify sufficient system resources
 
-2. **Cilium installation issues:**
+2. **Dependency installation issues (Linux):**
+   - Ensure you have `sudo` privileges
+   - Check internet connectivity for downloads
+   - For Ubuntu/Debian: `sudo apt-get update` before running
+   - Manual installation: Set `SKIP_AUTO_INSTALL=1` and install tools manually
+
+3. **Cilium installation issues:**
    - Ensure cluster is running: `make create-cluster`
    - Check node readiness: `kubectl get nodes`
    - Review Cilium status: `cilium status`
 
-3. **Network connectivity problems:**
+4. **Network connectivity problems:**
    - Verify Cilium agents are running: `kubectl get pods -n kube-system -l k8s-app=cilium`
    - Check Hubble relay: `kubectl get pods -n kube-system -l k8s-app=hubble-relay`
 

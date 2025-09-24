@@ -11,33 +11,7 @@ REQUIRED_BINS = talosctl kubectl cilium
 OS_UNAME := $(shell uname -s 2>/dev/null)
 HAVE_BREW := $(shell command -v brew >/dev/null 2>&1 && echo 1 || echo 0)
 
-define ensure_bin
-	@if ! command -v $(1) >/dev/null 2>&1; then \
-		if [ "$(OS_UNAME)" = "Darwin" ] && [ "$(HAVE_BREW)" = "1" ] && [ "$(SKIP_AUTO_INSTALL)" = "0" ]; then \
-			echo "[deps] Missing $(1) – attempting Homebrew install..."; \
-			case "$(1)" in \
-				talosctl) brew install siderolabs/tap/talosctl ;; \
-				cilium) brew install cilium-cli ;; \
-				kubectl) brew install kubernetes-cli ;; \
-				*) echo "[deps] No install recipe for $(1)"; exit 1 ;; \
-			esac; \
-			if ! command -v $(1) >/dev/null 2>&1; then \
-				echo "[deps] Installation of $(1) appears to have failed."; exit 1; \
-			else \
-				echo "[deps] Installed $(1)."; \
-			fi; \
-		else \
-			echo "[deps] Missing required binary: $(1)"; \
-			if [ "$(OS_UNAME)" = "Darwin" ] && [ "$(HAVE_BREW)" != "1" ]; then \
-				echo "[deps] Homebrew not found. Install from https://brew.sh/ or install $(1) manually."; \
-			fi; \
-			if [ "$(SKIP_AUTO_INSTALL)" = "1" ]; then \
-				echo "[deps] Auto-install skipped (SKIP_AUTO_INSTALL=1)."; \
-			fi; \
-			exit 1; \
-		fi; \
-	fi
-endef
+
 
 .PHONY: help deps create-cluster destroy-cluster deploy clean
 
@@ -45,37 +19,76 @@ help: ## Show this help message
 	@echo "Available targets:"
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-deps: ## Ensure required CLI tools are present (auto-install via Homebrew on macOS if possible)
+deps: ## Ensure required CLI tools are present (auto-install on macOS/Linux)
 ifeq ($(strip $(REQUIRED_BINS)),)
 	@echo "[deps] No required binaries listed."
 else
 	@echo "[deps] Verifying required binaries: $(REQUIRED_BINS)";
 	@for b in $(REQUIRED_BINS); do \
 		echo "[deps] Checking $$b"; \
-		if ! command -v $$b >/dev/null 2>&1; then \
-			if [ "$(OS_UNAME)" = "Darwin" ] && [ "$(HAVE_BREW)" = "1" ] && [ "$(SKIP_AUTO_INSTALL)" = "0" ]; then \
-				echo "[deps] Missing $$b – attempting Homebrew install..."; \
+		if command -v $$b >/dev/null 2>&1; then \
+			echo "[deps] ✓ $$b is already installed"; \
+		elif [ "$(SKIP_AUTO_INSTALL)" = "0" ]; then \
+			echo "[deps] Missing $$b – attempting installation..."; \
+			if [ "$(OS_UNAME)" = "Darwin" ] && [ "$(HAVE_BREW)" = "1" ]; then \
 				case "$$b" in \
 					talosctl) brew install siderolabs/tap/talosctl ;; \
 					cilium) brew install cilium-cli ;; \
 					kubectl) brew install kubernetes-cli ;; \
-					*) echo "[deps] No install recipe for $$b"; exit 1 ;; \
+					*) echo "[deps] No Homebrew recipe for $$b"; exit 1 ;; \
 				esac; \
-				if ! command -v $$b >/dev/null 2>&1; then \
-					echo "[deps] Installation of $$b appears to have failed."; exit 1; \
-				else \
-					echo "[deps] Installed $$b."; \
-				fi; \
+			elif [ "$(OS_UNAME)" = "Linux" ]; then \
+				case "$$b" in \
+					talosctl) \
+						echo "[deps] Installing talosctl for Linux..."; \
+						curl -sL https://talos.dev/install | sh; \
+						sudo mv talosctl /usr/local/bin/; \
+						;; \
+					cilium) \
+						echo "[deps] Installing cilium-cli for Linux..."; \
+						CILIUM_CLI_VERSION=$$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt); \
+						CLI_ARCH=amd64; \
+						if [ "$$(uname -m)" = "aarch64" ] || [ "$$(uname -m)" = "arm64" ]; then CLI_ARCH=arm64; fi; \
+						curl -L --fail --remote-name-all https://github.com/cilium/cilium-cli/releases/download/$${CILIUM_CLI_VERSION}/cilium-linux-$${CLI_ARCH}.tar.gz{,.sha256sum}; \
+						sha256sum --check cilium-linux-$${CLI_ARCH}.tar.gz.sha256sum; \
+						sudo tar xzvfC cilium-linux-$${CLI_ARCH}.tar.gz /usr/local/bin; \
+						rm cilium-linux-$${CLI_ARCH}.tar.gz{,.sha256sum}; \
+						;; \
+					kubectl) \
+						echo "[deps] Installing kubectl for Linux..."; \
+						if command -v apt-get >/dev/null 2>&1; then \
+							sudo apt-get update && sudo apt-get install -y apt-transport-https ca-certificates curl gnupg; \
+							curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg; \
+							echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list; \
+							sudo apt-get update && sudo apt-get install -y kubectl; \
+						else \
+							curl -LO "https://dl.k8s.io/release/$$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"; \
+							sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl; \
+							rm kubectl; \
+						fi; \
+						;; \
+					*) echo "[deps] No Linux install recipe for $$b"; exit 1 ;; \
+				esac; \
 			else \
-				echo "[deps] Missing required binary: $$b"; \
-				if [ "$(OS_UNAME)" = "Darwin" ] && [ "$(HAVE_BREW)" != "1" ]; then \
-					echo "[deps] Homebrew not found. Install from https://brew.sh/ or install $$b manually."; \
-				fi; \
-				if [ "$(SKIP_AUTO_INSTALL)" = "1" ]; then \
-					echo "[deps] Auto-install skipped (SKIP_AUTO_INSTALL=1)."; \
-				fi; \
+				echo "[deps] Unsupported OS: $(OS_UNAME)"; \
 				exit 1; \
 			fi; \
+			if ! command -v $$b >/dev/null 2>&1; then \
+				echo "[deps] Installation of $$b appears to have failed."; exit 1; \
+			else \
+				echo "[deps] Successfully installed $$b."; \
+			fi; \
+		else \
+			echo "[deps] Missing required binary: $$b"; \
+			if [ "$(OS_UNAME)" = "Darwin" ] && [ "$(HAVE_BREW)" != "1" ]; then \
+				echo "[deps] Homebrew not found. Install from https://brew.sh/ or install $$b manually."; \
+			elif [ "$(OS_UNAME)" = "Linux" ]; then \
+				echo "[deps] Please install $$b manually or run with SKIP_AUTO_INSTALL=0"; \
+			fi; \
+			if [ "$(SKIP_AUTO_INSTALL)" = "1" ]; then \
+				echo "[deps] Auto-install skipped (SKIP_AUTO_INSTALL=1)."; \
+			fi; \
+			exit 1; \
 		fi; \
 	done
 endif
@@ -109,8 +122,6 @@ create-cluster: deps ## Create Talos cluster (override CONTROLPLANES=X WORKERS=Y
 		--skip-k8s-node-readiness-check
 
 destroy-cluster: ## Destroy Talos cluster (no-op if absent)
-	@echo "[destroy] Checking if cluster '$(CLUSTER_NAME)' exists..."
-	@$(CHECK_CLUSTER_EXISTS) || { echo "[destroy] Cluster $(CLUSTER_NAME) not found; nothing to do."; exit 0; }
 	talosctl cluster destroy --name $(CLUSTER_NAME) || true
 	@echo "[destroy] Cluster $(CLUSTER_NAME) destroyed."
 
@@ -128,5 +139,7 @@ deploy: deps ## Generate manifests & deploy core stack (no-op if already deploye
 	kubectl -n kube-system rollout status ds/cilium --timeout=5m
 	kubectl -n kube-system rollout status deploy/cilium-operator --timeout=5m
 	@echo "[deploy] Generated Cilium manifests applied."
+	@echo "[deploy] Checking Cilium status..."
+	cilium status
 
 clean: destroy-cluster ## Clean up everything
