@@ -1,0 +1,58 @@
+resources:
+  - cilium-manifests.yaml
+  - https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.1.0/config/crd/standard/gateway.networking.k8s.io_gatewayclasses.yaml
+  - https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.1.0/config/crd/standard/gateway.networking.k8s.io_gateways.yaml
+  - https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.1.0/config/crd/standard/gateway.networking.k8s.io_httproutes.yaml
+  - https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.1.0/config/crd/standard/gateway.networking.k8s.io_referencegrants.yaml
+  - https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.1.0/config/crd/standard/gateway.networking.k8s.io_grpcroutes.yaml
+  - https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.1.0/config/crd/experimental/gateway.networking.k8s.io_tlsroutes.yaml
+  - https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+
+patches:
+  - target:
+      kind: Deployment
+      name: metrics-server
+      namespace: kube-system
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/args/-
+        value: --kubelet-insecure-tls
+      - op: add
+        path: /spec/template/spec/containers/0/args/-
+        value: --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname
+
+  - target:
+      kind: DaemonSet
+      name: cilium
+      namespace: kube-system
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/hostNetwork
+        value: true
+      - op: remove
+        path: /spec/template/spec/containers/0/env
+        # if env not existing this removal will fail; ignore with pointer to create fresh list
+        # (Kustomize json6902 patch aborts on failed remove, so we rebuild below only if existed)
+      - op: add
+        path: /spec/template/spec/containers/0/env
+        value:
+          - name: KUBERNETES_SERVICE_HOST
+            value: "10.5.0.2"
+          - name: KUBERNETES_SERVICE_PORT
+            value: "6443"
+
+  - target:
+      kind: ConfigMap
+      name: cilium-config
+      namespace: kube-system
+    patch: |-
+      - op: add
+        path: /data/enable-gateway-api
+        value: "true"
+      - op: add
+        path: /data/gateway-api-hostnetwork-enabled
+        value: "true"
+      - op: add
+        path: /data/kube-proxy-replacement
+        value: "true"
+

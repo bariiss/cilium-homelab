@@ -1,0 +1,15 @@
+cluster:
+  network:
+    cni:
+      name: none
+  proxy:
+    disabled: true
+machine:
+  network:
+    extraHostEntries:
+      - ip: 127.0.0.1
+        aliases:
+          - localhost
+  sysctls:
+    net.ipv4.ip_forward: "1"
+    net.bridge.bridge-nf-call-iptables: "1"

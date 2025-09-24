@@ -1,0 +1,47 @@
+# Project-specific ignores for Talos + Cilium ephemeral dev cluster
+
+# Talos isolated config and generated cluster state (never commit secrets/certs)
+.talos/
+
+# Generated Cilium manifests (regenerated via `make deploy-core`)
+deploy/00-core/cilium-manifests.yaml
+
+# Kube configs or temp merges
+kubeconfig-*.yaml
+*.kubeconfig
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+
+# OS / tooling noise
+.DS_Store
+Thumbs.db
+
+# Logs & diagnostics
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.bak
+*~
+
+# macOS metadata
+.AppleDouble
+.LSOverride
+
+# Python virtual envs if any experiments added later
+venv/
+.env/
+
+# Node modules (in case future frontend samples go here)
+node_modules/
+
+# Coverage / test artifacts (future)
+coverage/
+.junit/
+
+# Container build cache directories (if added later)
+.docker-cache/
