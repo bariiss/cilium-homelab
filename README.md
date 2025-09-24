@@ -62,14 +62,22 @@ Get your Cilium homelab up and running in minutes! Simply clone the repository a
 
 ### Prerequisites
 
-The Makefile will automatically install required dependencies:
+The Makefile will automatically install required dependencies and verify system requirements:
 
-**macOS**: Uses Homebrew for installation  
-**Linux (Ubuntu/Debian)**: Uses official installation methods and package managers
+**Required:**
+
+- **Docker** - Must be installed and running (verified automatically)
+
+**Auto-installed if missing:**
 
 - `talosctl` - Talos cluster management CLI
-- `kubectl` - Kubernetes CLI
+- `kubectl` - Kubernetes CLI  
 - `cilium` - Cilium CLI for network management
+
+**Platform Support:**
+
+- **macOS**: Uses Homebrew for installation  
+- **Linux (Ubuntu/Debian)**: Uses official installation methods and package managers
 
 ### Installation
 

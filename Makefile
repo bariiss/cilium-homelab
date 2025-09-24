@@ -91,6 +91,26 @@ else
 			exit 1; \
 		fi; \
 	done
+	@echo "[deps] Checking Docker availability..."
+	@if ! command -v docker >/dev/null 2>&1; then \
+		echo "[deps] ❌ Docker is not installed."; \
+		if [ "$(OS_UNAME)" = "Darwin" ]; then \
+			echo "[deps] Please install Docker Desktop from https://docs.docker.com/desktop/install/mac-install/"; \
+		elif [ "$(OS_UNAME)" = "Linux" ]; then \
+			echo "[deps] Please install Docker from https://docs.docker.com/engine/install/"; \
+		fi; \
+		exit 1; \
+	elif ! docker info >/dev/null 2>&1; then \
+		echo "[deps] ❌ Docker is installed but not running."; \
+		if [ "$(OS_UNAME)" = "Darwin" ]; then \
+			echo "[deps] Please start Docker Desktop application."; \
+		elif [ "$(OS_UNAME)" = "Linux" ]; then \
+			echo "[deps] Please start Docker daemon: sudo systemctl start docker"; \
+		fi; \
+		exit 1; \
+	else \
+		echo "[deps] ✓ Docker is running"; \
+	fi
 endif
 
 # ---- Helpers (shell checks embedded in targets) ----
@@ -138,7 +158,14 @@ deploy: deps ## Generate manifests & deploy core stack (no-op if already deploye
 	kubectl apply -k deploy/00-core
 	kubectl -n kube-system rollout status ds/cilium --timeout=5m
 	kubectl -n kube-system rollout status deploy/cilium-operator --timeout=5m
+	@echo "[deploy] Waiting for Hubble components..."
+	kubectl -n kube-system rollout status deploy/hubble-relay --timeout=5m
+	kubectl -n kube-system rollout status deploy/hubble-ui --timeout=5m
 	@echo "[deploy] Generated Cilium manifests applied."
+	@echo "[deploy] Waiting for all Cilium pods to be ready..."
+	kubectl -n kube-system wait --for=condition=Ready pods -l k8s-app=cilium --timeout=5m
+	kubectl -n kube-system wait --for=condition=Ready pods -l k8s-app=hubble-relay --timeout=5m
+	kubectl -n kube-system wait --for=condition=Ready pods -l k8s-app=hubble-ui --timeout=5m
 	@echo "[deploy] Checking Cilium status..."
 	cilium status
 
