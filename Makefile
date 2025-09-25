@@ -2,13 +2,10 @@ CLUSTER_NAME ?= talos-home
 CONTROLPLANES ?= 1
 WORKERS ?= 1
 
-# QEMU-based Talos cluster configuration
-# Specific resource allocation for control plane nodes
-CONTROLPLANE_CPUS ?= 4
-CONTROLPLANE_MEMORY ?= 4096
+CONTROLPLANE_CPUS ?= 2
+CONTROLPLANE_MEMORY ?= 3072
 
-# Specific resource allocation for worker nodes  
-WORKER_CPUS ?= 4
+WORKER_CPUS ?= 2
 WORKER_MEMORY ?= 4096
 
 # QEMU-specific settings

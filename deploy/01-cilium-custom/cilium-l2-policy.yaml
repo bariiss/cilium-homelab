@@ -14,10 +14,11 @@ spec:
       - key: app.kubernetes.io/component
         operator: In
         values: ["controller"]
-  # Only worker nodes should announce the IP
+  # Target nodes by hostname (or remove nodeSelector to target all nodes)
   nodeSelector:
-    matchLabels:
-      node-role.kubernetes.io/worker: ""
-  interfaces: ["en5"]
+    matchExpressions:
+      - key: kubernetes.io/hostname
+        operator: Exists
+  interfaces: []
   externalIPs: true
   loadBalancerIPs: true

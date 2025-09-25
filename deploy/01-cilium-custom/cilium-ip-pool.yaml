@@ -5,8 +5,8 @@ metadata:
   namespace: kube-system
 spec:
   blocks:
-  - start: "192.168.50.199"
-    stop: "192.168.50.199"
+  - start: "10.5.0.100"
+    stop: "10.5.0.100"
   serviceSelector:
     matchExpressions:
     - key: app.kubernetes.io/name
