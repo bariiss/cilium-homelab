@@ -1,0 +1,23 @@
+apiVersion: cilium.io/v2alpha1
+kind: CiliumL2AnnouncementPolicy
+metadata:
+  name: ingress-l2announce
+  namespace: kube-system
+spec:
+  # Announce the Service VIPs selected by this policy
+  # Selector targets the nginx ingress controller Service by name and namespace
+  serviceSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: ["ingress-nginx"]
+      - key: app.kubernetes.io/component
+        operator: In
+        values: ["controller"]
+  # Only worker nodes should announce the IP
+  nodeSelector:
+    matchLabels:
+      node-role.kubernetes.io/worker: ""
+  interfaces: ["en5"]
+  externalIPs: true
+  loadBalancerIPs: true

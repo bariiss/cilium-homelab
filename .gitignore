@@ -6,6 +6,9 @@
 # Generated Cilium manifests (regenerated via `make deploy-core`)
 deploy/00-core/cilium-manifests.yaml
 
+# Downloaded Talos kernel images and ISOs
+_out/
+
 # Kube configs or temp merges
 kubeconfig-*.yaml
 *.kubeconfig

@@ -7,6 +7,7 @@ resources:
   - https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.1.0/config/crd/standard/gateway.networking.k8s.io_grpcroutes.yaml
   - https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.1.0/config/crd/experimental/gateway.networking.k8s.io_tlsroutes.yaml
   - https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+  - https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.13.2/deploy/static/provider/cloud/deploy.yaml
 
 patches:
   - target:
@@ -26,9 +27,6 @@ patches:
       name: cilium
       namespace: kube-system
     patch: |-
-      - op: replace
-        path: /spec/template/spec/hostNetwork
-        value: true
       - op: remove
         path: /spec/template/spec/containers/0/env
         # if env not existing this removal will fail; ignore with pointer to create fresh list
@@ -47,12 +45,34 @@ patches:
       namespace: kube-system
     patch: |-
       - op: add
-        path: /data/enable-gateway-api
-        value: "true"
-      - op: add
-        path: /data/gateway-api-hostnetwork-enabled
-        value: "true"
-      - op: add
         path: /data/kube-proxy-replacement
         value: "true"
+
+  - target:
+      kind: Service
+      name: ingress-nginx-controller
+      namespace: ingress-nginx
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          io.cilium/lb-ipam-ips: "192.168.50.199"
+          io.cilium/lb-ipam-pool: "ingress-lb-pool"
+          prometheus.io/scrape: "true"
+          prometheus.io/port: "10254"
+      - op: replace
+        path: /spec/loadBalancerClass
+        value: "io.cilium/l2-announcer"
+      - op: replace
+        path: /spec/externalTrafficPolicy
+        value: "Cluster"
+
+  - target:
+      kind: Deployment
+      name: ingress-nginx-controller
+      namespace: ingress-nginx
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/hostNetwork
+        value: true
 

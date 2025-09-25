@@ -1,0 +1,4 @@
+resources:
+  - cilium-l2-policy.yaml
+  - cilium-ip-pool.yaml
+  - cilium-pod-ip-pool.yaml

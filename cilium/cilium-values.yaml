@@ -1,17 +1,90 @@
 kubeProxyReplacement: true
 
+identityAllocationMode: "crd"
+
+datapathMode: "veth"
+routingMode: "tunnel"
+
+bpf:
+  masquerade: true
+enableIPv4Masquerade: true
+ipv4NativeRoutingCIDR: "10.5.0.0/24"
+
+
 hubble:
   enabled: true
-  relay:
-    enabled: true
   ui:
     enabled: true
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                k8s-app: hubble-ui
+            topologyKey: kubernetes.io/hostname
+    tolerations:
+      - key: "node.kubernetes.io/not-ready"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 0
+      - key: "node.kubernetes.io/unreachable"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 0
+    service:
+      type: "ClusterIP"
+      externalTrafficPolicy: Local
+      annotations:
+        service.beta.kubernetes.io/external-traffic: Local
+  relay:
+    enabled: true
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                k8s-app: hubble-ui
+            topologyKey: kubernetes.io/hostname
+    tolerations:
+      - key: "node.kubernetes.io/not-ready"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 0
+      - key: "node.kubernetes.io/unreachable"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 0
+  metrics:
+    enabled:
+      - "dns:query;ignoreAAAA"
+      - "http"
+      - "tcp"
+      - "flow"
+      - "drop"
+    port: 9965
+
 
 envoy:
   enabled: false
 
+# Configure external envoy proxy settings
+externalEnvoyProxy: false
+
+# Configure ingress default load balancer mode
+ingressDefaultLBMode: "shared"
+
 ipam:
-  mode: kubernetes
+  mode: multi-pool
+
+l2announcements:
+  enabled: true
+  leaseDuration: "3s"
+  leaseRenewDeadline: "1s"
+  leaseRetryPeriod: "200ms"
 
 securityContext:
   capabilities:
@@ -42,14 +115,24 @@ k8sServicePort: 6443
 
 hostNetwork: true
 
+operator:
+  enabled: true
+  replicas: 2
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              io.cilium/app: operator
+          topologyKey: kubernetes.io/hostname
+
+agent: true
+
 prometheus:
   enabled: true
-  port: 9090
 
 ingressController:
   enabled: false
-
-gatewayAPI:
-  enabled: true
-  hostNetwork:
-    enabled: true
+  default: false
