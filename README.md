@@ -1,6 +1,6 @@
 # Talos Cilium HomeLab
 
-A comprehensive homelab setup for running a high-performance Kubernetes cluster using Talos OS with Cilium CNI and advanced networking features. This project includes router DHCP integration, L2 announcements, and ingress-nginx for production-like networking in a local environment.
+A comprehensive homelab setup for running a high-performance Kubernetes cluster using Talos OS with Cilium CNI and advanced networking features. This project includes L2 announcements and ingress-nginx for production-like networking in a local environment. Networking is fully self-contained via a QEMU vmnet network.
 
 ## 🏗️ Architecture
 
@@ -9,8 +9,8 @@ This project provides a complete Kubernetes environment with advanced networking
 - **Talos OS v1.11.1**: Immutable, minimal, and secure Kubernetes distribution running on QEMU
 - **Cilium v1.18.1**: High-performance CNI with eBPF, kube-proxy replacement, and L2 announcements
 - **ingress-nginx**: Controller with LoadBalancer service using Cilium L2 announcer
-- **Router DHCP Integration**: Cluster nodes get IPs from your home router (10.5.0.x/24)
-- **L2 Announcements**: ingress-nginx accessible at 10.5.0.100 on en5 interface
+- **Self-contained DHCP**: QEMU creates a vmnet network with DHCP on 10.5.0.0/24
+- **L2 Announcements**: ingress-nginx accessible at 10.5.0.100 on the vmnet network
 - **Hubble**: Network observability platform with UI
 - **Metrics Server**: Resource usage metrics collection
 
@@ -32,11 +32,11 @@ cilium-homelab/
 │   │   └── kustomization.yaml       # Gateway API CRDs, metrics-server, ingress-nginx
 │   └── 01-cilium-custom/             # Cilium custom resources (applied after core)
 │       ├── cilium-ip-pool.yaml      # LoadBalancer IP pool (10.5.0.100)
-│       ├── cilium-l2-policy.yaml    # L2 announcement policy for en5 interface
+│       ├── cilium-l2-policy.yaml    # L2 announcement policy (cluster-scoped)
 │       ├── cilium-pod-ip-pool.yaml  # Pod IP pool (10.244.0.0/16)
 │       └── kustomization.yaml       # Custom resource deployment configuration
 └── talos/
-    └── patch.yaml                    # Talos configuration with en5 DHCP networking
+   └── patch.yaml                    # Talos configuration for Cilium (no kube-proxy/CNI)
 ```
 
 ### Directory Details
@@ -69,7 +69,7 @@ Core Kubernetes components deployed first to establish foundation:
 Cilium custom resources deployed after core components are ready:
 
 - **`cilium-ip-pool.yaml`**: LoadBalancer IP pool configuration (10.5.0.100/32)
-- **`cilium-l2-policy.yaml`**: L2 announcement policy for en5 interface
+- **`cilium-l2-policy.yaml`**: L2 announcement policy for LoadBalancer and ExternalIPs
 - **`cilium-pod-ip-pool.yaml`**: Pod CIDR configuration (10.244.0.0/16)
 - **`kustomization.yaml`**: Custom resource deployment coordination
 
@@ -78,10 +78,9 @@ Cilium custom resources deployed after core components are ready:
 Talos OS configuration optimized for Cilium networking:
 
 - **`patch.yaml`**: Advanced cluster configuration featuring:
-  - en5 interface with router DHCP integration (10.5.0.x/24)
-  - CNI and kube-proxy disabled for Cilium replacement  
-  - Bridge networking sysctls for container communication
-  - Cluster network configuration (10.5.0.0/24)
+   - CNI and kube-proxy disabled for Cilium replacement  
+   - Bridge networking sysctls for container communication
+   - Cluster vmnet (10.5.0.0/24) provided by QEMU
 
 #### `_out/`
 
@@ -101,7 +100,6 @@ The Makefile will automatically install required dependencies and verify system 
 **Required:**
 
 - **QEMU** - Virtualization platform (automatically installed if missing)
-- **Router DHCP** - Your home router must provide DHCP for 10.5.0.x/24 network
 
 **Auto-installed if missing:**
 
@@ -117,9 +115,8 @@ The Makefile will automatically install required dependencies and verify system 
 
 **Network Requirements:**
 
-- **VMNet Interface**: en5 interface available for QEMU bridge networking and L2 announcements
+- **QEMU vmnet**: A self-managed vmnet network is created on 10.5.0.0/24 with DHCP
 - **IP Range**: 10.5.0.100 must be available for ingress-nginx LoadBalancer
-- **Router Network**: 10.5.0.x/24 DHCP range configured on your router
 
 ### Installation
 
@@ -140,7 +137,7 @@ The Makefile will automatically install required dependencies and verify system 
    make create-cluster
    ```
 
-   This creates a Talos cluster using QEMU with ARM64 architecture. Nodes will get IPs from your router's DHCP (10.5.0.x/24).
+   This creates a Talos cluster using QEMU with ARM64 architecture. Nodes will get IPs from the QEMU vmnet DHCP (10.5.0.x/24).
 
 2. **Deploy components in two phases:**
 
@@ -251,11 +248,7 @@ make create-cluster CONTROLPLANES=1 WORKERS=2 CPUS=2 MEMORY=6144
 make create-cluster SKIP_AUTO_INSTALL=1
 ```
 
-**Use different VMNet interface:**
-
-```bash
-make create-cluster TALOS_QEMU_VMNET_IFNAME=eth0  # Use eth0 instead of en5
-```
+<!-- VMNet interface selection is no longer required; QEMU manages its own vmnet. -->
 
 #### Available Make Targets
 
@@ -277,7 +270,7 @@ All parameters can be overridden when running make targets:
 | `WORKERS` | `1` | Number of worker nodes | `1`, `2`, `3`, `4` |
 | `CPUS` | `4` | CPU cores per node | `1`, `2`, `4`, `8` |
 | `MEMORY` | `4096` | Memory in MB per node | `2048` (2GB), `8192` (8GB) |
-| `TALOS_QEMU_VMNET_IFNAME` | `en5` | VMNet interface for QEMU bridge networking | `en0`, `eth0`, `br0` |
+<!-- TALOS_QEMU_VMNET_IFNAME removed: QEMU manages its own vmnet -->
 | `TALOSCTL_BIN` | `/path/to/local/talosctl` | Custom talosctl binary path | `/usr/local/bin/talosctl` |
 | `SKIP_AUTO_INSTALL` | `0` | Skip automatic tool installation | `0` (install), `1` (skip) |
 
@@ -298,20 +291,17 @@ All parameters can be overridden when running make targets:
 
 ### Network Architecture
 
-**Multi-tier networking configuration:**
+**Networking configuration:**
 
-- **Router Network**: 10.5.0.x/24 (DHCP from home router)
-  - Talos nodes get IPs automatically from router DHCP
-  - Interface: en5 with DHCP client configuration
-- **Cluster Network**: 10.5.0.0/24 (internal cluster communication)
+- **Cluster vmnet**: 10.5.0.0/24 (QEMU-managed DHCP)
   - Control plane: 10.5.0.2
   - Worker nodes: 10.5.0.3+
 - **Pod Network**: 10.244.0.0/16 (managed by Cilium)
   - Automatic pod IP allocation
   - eBPF-based routing and security
 - **LoadBalancer IP**: 10.5.0.100/32
-  - ingress-nginx controller accessible from host network
-  - L2 announcements via en5 interface
+  - ingress-nginx controller accessible from the host via vmnet
+  - L2 announcements within the vmnet network
 
 ### Cilium Features
 
@@ -331,7 +321,7 @@ All parameters can be overridden when running make targets:
 - **Datapath Mode**: veth (compatibility with Talos)
 - **Routing Mode**: tunnel (encapsulated pod-to-pod communication)
 - **IPAM Mode**: Kubernetes with custom IP pools
-- **L2 Announcements**: Enabled for en5 interface
+- **L2 Announcements**: Enabled for LoadBalancer and ExternalIPs
 - **BPF Mount**: Disabled (Talos OS manages BPF filesystem)
 - **Security Context**: Comprehensive capabilities for eBPF operations
 - **Custom Resources**: LoadBalancerIPPool, L2AnnouncementPolicy, PodIPPool
@@ -341,7 +331,7 @@ All parameters can be overridden when running make targets:
 **LoadBalancer Configuration:**
 
 - **Service Type**: LoadBalancer (uses Cilium L2 announcements)
-- **External IP**: 10.5.0.100 (announced via L2 on en5 interface)
+- **External IP**: 10.5.0.100 (announced via L2 on vmnet)
 - **High Availability**: Ready for multi-node deployments
 - **SSL Termination**: Supports TLS/SSL certificates
 - **Backend Protocol**: HTTP/HTTPS with configurable timeouts
@@ -380,16 +370,14 @@ kubectl top pods -A
 - **macOS**: Automatic dependency installation via Homebrew
 - **Linux**: Ubuntu 20.04+, Debian 11+, or compatible distributions with KVM support
 - **Prerequisites**:
-  - QEMU with ARM64 emulation support and VMNet framework
-  - Router with DHCP configured for 10.5.0.x/24 network  
-  - Network interface en5 available for VMNet bridge and L2 announcements
+   - QEMU with ARM64 emulation support and vmnet framework
 
 ### Hardware Requirements
 
 - **CPU**: x86_64 or ARM64 processor with virtualization support
 - **Memory**: 8GB+ RAM recommended (4GB minimum for single-node cluster)
 - **Storage**: 10GB+ free disk space for images and cluster data
-- **Network**: Access to home router DHCP and unused IP 10.5.0.100
+- **Network**: Unused IP 10.5.0.100 on the vmnet (10.5.0.0/24)
 
 ### Automatic Installation Support
 
@@ -407,14 +395,13 @@ kubectl top pods -A
 1. **Cluster creation fails:**
    - Ensure QEMU is installed and functioning
    - Verify ARM64 emulation support: `qemu-system-aarch64 --version`
-   - Check if router DHCP is working on 10.5.0.x/24 network
+   - Ensure the QEMU vmnet DHCP is assigning 10.5.0.x addresses to nodes
    - Verify sufficient system resources (8GB+ RAM recommended)
 
 2. **Network connectivity problems:**
-   - Verify en5 interface exists: `ip addr show en5` or `ifconfig en5`
-   - Check router DHCP range includes 10.5.0.x addresses
-   - Ensure 10.5.0.100 is not in use by other devices
-   - Verify L2 announcements: `cilium bgp peers` (should show L2 announcements)
+   - Ensure QEMU vmnet is active and cluster nodes have 10.5.0.x addresses
+   - Ensure 10.5.0.100 is not in use by other services
+   - Verify L2 announcements: `kubectl get ciliuml2announcementpolicies -A`
 
 3. **Dependency installation issues (Linux):**
    - Ensure you have `sudo` privileges for QEMU installation
