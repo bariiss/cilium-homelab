@@ -154,7 +154,13 @@ else
 			brew install qemu; \
 		elif [ "$(OS_UNAME)" = "Linux" ]; then \
 			if command -v apt-get >/dev/null 2>&1; then \
-				sudo apt-get update && sudo apt-get install -y qemu-system-x86 qemu-system-arm qemu-utils; \
+				echo "[deps] Attempting to fix package dependencies first..."; \
+				sudo apt-get update; \
+				sudo apt-get install -f -y; \
+				sudo apt-get autoremove -y; \
+				echo "[deps] Installing QEMU packages..."; \
+				sudo apt-get install -y --fix-broken qemu-system-x86 qemu-system-arm qemu-utils || \
+				sudo apt-get install -y qemu-system qemu-utils; \
 			elif command -v yum >/dev/null 2>&1; then \
 				sudo yum install -y qemu-kvm qemu-system-x86 qemu-system-aarch64; \
 			elif command -v pacman >/dev/null 2>&1; then \
@@ -262,6 +268,7 @@ deploy: deps ## Generate manifests & deploy core stack (no-op if already deploye
 		exit 0; \
 	else \
 		echo "[deploy] Generating and applying Cilium manifests..."; \
+		mkdir -p deploy/00-core; \
 		cilium install --values cilium/cilium-values.yaml --dry-run > deploy/00-core/cilium-manifests.yaml; \
 		kubectl apply -k deploy/00-core; \
 		kubectl -n kube-system rollout status deploy/cilium-operator --timeout=5m; \
