@@ -51,50 +51,6 @@ endif
 QEMU_BINS = qemu-system-x86_64 qemu-system-aarch64
 
 OS_UNAME := $(shell uname -s 2>/dev/null)
-	OVMF_CANDIDATES="/usr/share/OVMF/OVMF_CODE.fd /usr/share/OVMF/OVMF_CODE_4M.fd /usr/share/OVMF/OVMF_CODE.secboot.fd /usr/share/OVMF/OVMF_CODE_4M.secboot.fd /usr/share/ovmf/OVMF_CODE.fd /usr/share/ovmf/OVMF_CODE_4M.fd /usr/share/qemu/OVMF_CODE.fd /usr/share/qemu/OVMF_CODE_4M.fd"; \
-	OVMF_FOUND=0; \
-	for candidate in $$OVMF_CANDIDATES; do \
-		if [ -f $$candidate ]; then \
-			OVMF_FOUND=1; \
-			break; \
-		fi; \
-	done; \
-	if [ $$OVMF_FOUND -eq 0 ]; then \
-		echo "[deps] UEFI firmware (OVMF) not found; attempting installation..."; \
-		if [ "$(OS_UNAME)" = "Linux" ]; then \
-			if command -v apt-get >/dev/null 2>&1; then \
-				sudo apt-get install -y --no-install-recommends ovmf edk2-ovmf >/dev/null 2>&1 || sudo apt-get install -y --no-install-recommends ovmf; \
-			elif command -v yum >/dev/null 2>&1; then \
-				sudo yum install -y edk2-ovmf; \
-			elif command -v pacman >/dev/null 2>&1; then \
-				sudo pacman -S edk2-ovmf; \
-			else \
-				echo "[deps] Please install OVMF firmware manually."; \
-				exit 1; \
-			fi; \
-		elif [ "$(OS_UNAME)" = "Darwin" ]; then \
-			echo "[deps] Install OVMF firmware via Homebrew (e.g., brew install qemu --with-ovmf) and rerun."; \
-			exit 1; \
-		else \
-			echo "[deps] Please install OVMF firmware manually for $(OS_UNAME)."; \
-			exit 1; \
-		fi; \
-		OVMF_FOUND_POST=0; \
-		for candidate in $$OVMF_CANDIDATES; do \
-			if [ -f $$candidate ]; then \
-				OVMF_FOUND_POST=1; \
-				break; \
-			fi; \
-		done; \
-		if [ $$OVMF_FOUND_POST -eq 0 ]; then \
-			echo "[deps] OVMF firmware still not found. Specify --extra-uefi-search-paths or install firmware manually."; \
-			exit 1; \
-		else \
-			echo "[deps] ✓ OVMF firmware installed."; \
-		fi; \
-	else \
-		echo "[deps] ✓ OVMF firmware located."; \
-	fi
 HAVE_BREW := $(shell command -v brew >/dev/null 2>&1 && echo 1 || echo 0)
 
 
@@ -197,19 +153,19 @@ else
 		if [ "$(OS_UNAME)" = "Darwin" ] && [ "$(HAVE_BREW)" = "1" ]; then \
 			brew install qemu; \
 		elif [ "$(OS_UNAME)" = "Linux" ]; then \
-			if command -v apt-get >/dev/null 2>&1; then \
+			if command -v apt-get >/divert null 2>&1; then \
 				echo "[deps] Attempting to resolve package conflicts..."; \
 				sudo apt-get update; \
 				echo "[deps] Installing QEMU packages via apt..."; \
-				if ! sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-system-arm qemu-utils ovmf; then \
+				if ! sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-system-arm qemu-utils; then \
 					echo "[deps] Installation failed, attempting to pin compatible libelf1/libdw1 versions..."; \
 					if sudo apt-get install -y --allow-downgrades libelf1=0.188-2.1 libdw1=0.188-2.1 >/dev/null 2>&1; then \
 						echo "[deps] Retrying QEMU installation after libelf1/libdw1 pin..."; \
-						sudo apt-get install -y --no-install-recommends qemu-system qemu-utils ovmf || \
+						sudo apt-get install -y --no-install-recommends qemu-system qemu-utils || \
 							{ echo "[deps] QEMU installation still failing."; \
 							echo "[deps] Please resolve manually. Suggested commands:"; \
 							echo "[deps]   sudo apt-get install -y libelf1=0.188-2.1 libdw1=0.188-2.1"; \
-							echo "[deps]   sudo apt-get install -y qemu-system qemu-utils ovmf"; \
+							echo "[deps]   sudo apt-get install -y qemu-system qemu-utils"; \
 							echo "[deps] Or install QEMU by another method and rerun with SKIP_AUTO_INSTALL=1."; \
 							exit 1; \
 						}; \
@@ -218,15 +174,15 @@ else
 						echo "[deps] Please resolve the package conflict manually."; \
 						echo "[deps] Suggested steps:"; \
 						echo "[deps]   sudo apt-get install -y libelf1=0.188-2.1 libdw1=0.188-2.1"; \
-						echo "[deps]   sudo apt-get install -y qemu-system qemu-utils ovmf"; \
+						echo "[deps]   sudo apt-get install -y qemu-system qemu-utils"; \
 						echo "[deps] Or install QEMU by another method and rerun with SKIP_AUTO_INSTALL=1."; \
 						exit 1; \
 					fi; \
 				fi; \
 			elif command -v yum >/dev/null 2>&1; then \
-				sudo yum install -y qemu-kvm qemu-system-x86 qemu-system-aarch64 edk2-ovmf; \
+				sudo yum install -y qemu-kvm qemu-system-x86 qemu-system-aarch64; \
 			elif command -v pacman >/dev/null 2>&1; then \
-				sudo pacman -S qemu-base qemu-system-x86 qemu-system-aarch64 edk2-ovmf; \
+				sudo pacman -S qemu-base qemu-system-x86 qemu-system-aarch64; \
 			else \
 				echo "[deps] Please install QEMU manually"; exit 1; \
 			fi; \
