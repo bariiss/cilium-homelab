@@ -154,13 +154,24 @@ else
 			brew install qemu; \
 		elif [ "$(OS_UNAME)" = "Linux" ]; then \
 			if command -v apt-get >/dev/null 2>&1; then \
-				echo "[deps] Attempting to fix package dependencies first..."; \
+				echo "[deps] Attempting to resolve package conflicts..."; \
 				sudo apt-get update; \
-				sudo apt-get install -f -y; \
-				sudo apt-get autoremove -y; \
-				echo "[deps] Installing QEMU packages..."; \
-				sudo apt-get install -y --fix-broken qemu-system-x86 qemu-system-arm qemu-utils || \
-				sudo apt-get install -y qemu-system qemu-utils; \
+				echo "[deps] Trying to install QEMU with conflict resolution..."; \
+				if ! sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-system-arm qemu-utils 2>/dev/null; then \
+					echo "[deps] Standard installation failed, trying alternative packages..."; \
+					if ! sudo apt-get install -y --no-install-recommends qemu-system qemu-utils 2>/dev/null; then \
+						echo "[deps] Package manager installation failed, trying snap..."; \
+						if command -v snap >/dev/null 2>&1; then \
+							sudo snap install qemu --channel=latest/stable; \
+						else \
+							echo "[deps] All automatic installation methods failed."; \
+							echo "[deps] Please install QEMU manually with:"; \
+							echo "[deps]   sudo apt-get install qemu-system"; \
+							echo "[deps] Or resolve the libelf1/libdw1 conflict manually."; \
+							exit 1; \
+						fi; \
+					fi; \
+				fi; \
 			elif command -v yum >/dev/null 2>&1; then \
 				sudo yum install -y qemu-kvm qemu-system-x86 qemu-system-aarch64; \
 			elif command -v pacman >/dev/null 2>&1; then \
