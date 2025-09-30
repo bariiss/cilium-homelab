@@ -156,20 +156,27 @@ else
 			if command -v apt-get >/dev/null 2>&1; then \
 				echo "[deps] Attempting to resolve package conflicts..."; \
 				sudo apt-get update; \
-				echo "[deps] Trying to install QEMU with conflict resolution..."; \
-				if ! sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-system-arm qemu-utils 2>/dev/null; then \
-					echo "[deps] Standard installation failed, trying alternative packages..."; \
-					if ! sudo apt-get install -y --no-install-recommends qemu-system qemu-utils 2>/dev/null; then \
-						echo "[deps] Package manager installation failed, trying snap..."; \
-						if command -v snap >/dev/null 2>&1; then \
-							sudo snap install qemu --channel=latest/stable; \
-						else \
-							echo "[deps] All automatic installation methods failed."; \
-							echo "[deps] Please install QEMU manually with:"; \
-							echo "[deps]   sudo apt-get install qemu-system"; \
-							echo "[deps] Or resolve the libelf1/libdw1 conflict manually."; \
+				echo "[deps] Installing QEMU packages via apt..."; \
+				if ! sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-system-arm qemu-utils; then \
+					echo "[deps] Installation failed, attempting to pin compatible libelf1/libdw1 versions..."; \
+					if sudo apt-get install -y --allow-downgrades libelf1=0.188-2.1 libdw1=0.188-2.1 >/dev/null 2>&1; then \
+						echo "[deps] Retrying QEMU installation after libelf1/libdw1 pin..."; \
+						sudo apt-get install -y --no-install-recommends qemu-system qemu-utils || \
+							{ echo "[deps] QEMU installation still failing."; \
+							echo "[deps] Please resolve manually. Suggested commands:"; \
+							echo "[deps]   sudo apt-get install -y libelf1=0.188-2.1 libdw1=0.188-2.1"; \
+							echo "[deps]   sudo apt-get install -y qemu-system qemu-utils"; \
+							echo "[deps] Or install QEMU by another method and rerun with SKIP_AUTO_INSTALL=1."; \
 							exit 1; \
-						fi; \
+						}; \
+					else \
+						echo "[deps] Unable to automatically pin libelf1/libdw1 versions."; \
+						echo "[deps] Please resolve the package conflict manually."; \
+						echo "[deps] Suggested steps:"; \
+						echo "[deps]   sudo apt-get install -y libelf1=0.188-2.1 libdw1=0.188-2.1"; \
+						echo "[deps]   sudo apt-get install -y qemu-system qemu-utils"; \
+						echo "[deps] Or install QEMU by another method and rerun with SKIP_AUTO_INSTALL=1."; \
+						exit 1; \
 					fi; \
 				fi; \
 			elif command -v yum >/dev/null 2>&1; then \
