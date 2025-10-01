@@ -8,7 +8,13 @@ CONTROLPLANE_MEMORY ?= 3072
 WORKER_CPUS ?= 2
 WORKER_MEMORY ?= 4096
 
-# QEMU-specific settings
+# QEMU-speci						{ echo "[deps] QEMU installation still failing."; \
+						echo "[deps] Please resolve manually. Suggested commands:"; \
+						echo "[deps]   sudo apt-get install -y libelf1=0.188-2.1 libdw1=0.188-2.1"; \
+						echo "[deps]   sudo apt install qemu-system-arm qemu-system-aarch64 qemu-efi-aarch64"; \
+						echo "[deps] Or install QEMU by another method and rerun with SKIP_AUTO_INSTALL=1."; \
+						exit 1; \
+					}; \tings
 DISK_SIZE ?= 6144
 NETWORK_CIDR ?= 10.5.0.0/24
 TALOS_VERSION ?= v1.11.1
@@ -165,7 +171,11 @@ else
 							{ echo "[deps] QEMU installation still failing."; \
 							echo "[deps] Please resolve manually. Suggested commands:"; \
 							echo "[deps]   sudo apt-get install -y libelf1=0.188-2.1 libdw1=0.188-2.1"; \
-							echo "[deps]   sudo apt-get install -y qemu-system qemu-utils"; \
+							if [ "$(ARCH)" = "arm64" ]; then \
+								echo "[deps]   sudo apt install qemu-system-arm qemu-system-aarch64 qemu-efi-aarch64"; \
+							else \
+								echo "[deps]   sudo apt install qemu-system-x86_64 qemu-efi-amd64"; \
+							fi; \
 							echo "[deps] Or install QEMU by another method and rerun with SKIP_AUTO_INSTALL=1."; \
 							exit 1; \
 						}; \
@@ -174,7 +184,11 @@ else
 						echo "[deps] Please resolve the package conflict manually."; \
 						echo "[deps] Suggested steps:"; \
 						echo "[deps]   sudo apt-get install -y libelf1=0.188-2.1 libdw1=0.188-2.1"; \
-						echo "[deps]   sudo apt-get install -y qemu-system qemu-utils"; \
+						if [ "$(ARCH)" = "arm64" ]; then \
+							echo "[deps]   sudo apt install qemu-system-arm qemu-system-aarch64 qemu-efi-aarch64"; \
+						else \
+							echo "[deps]   sudo apt install qemu-system-x86_64 qemu-efi-amd64"; \
+						fi; \
 						echo "[deps] Or install QEMU by another method and rerun with SKIP_AUTO_INSTALL=1."; \
 						exit 1; \
 					fi; \
